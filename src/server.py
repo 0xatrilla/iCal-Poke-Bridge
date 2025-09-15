@@ -642,5 +642,23 @@ if __name__ == "__main__":
         logger.warning("  Server will start but tools may fail until credentials are fixed.")
     
     logger.info("🚀" + "="*77)
+from fastapi import Request
 
-    mcp.run(transport="http", host=host, port=port, stateless_http=True)
+@mcp.app.middleware("http")
+async def allow_json_only_clients(request: Request, call_next):
+    """
+    Middleware to allow clients that do NOT send 'text/event-stream' in Accept header.
+    This lets Poke connect to /mcp directly.
+    """
+    # Force FastMCP to treat missing SSE as JSON
+    if "accept" in request.headers:
+        accept = request.headers["accept"]
+        if "text/event-stream" not in accept:
+            # Inject text/event-stream temporarily so FastMCP won't reject
+            request.headers.__dict__["_list"].append(
+                (b"accept", b"text/event-stream")
+            )
+    response = await call_next(request)
+    return response
+    
+mcp.run(transport="http", host=host, port=port, stateless_http=True)
