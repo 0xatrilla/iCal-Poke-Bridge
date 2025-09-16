@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from icalendar import Calendar as IcsCalendar, Event as IcsEvent
 
-from mcp.server import http  # Correct MCP SDK import
+from mcp.server.fastmcp import FastMCP  # Correct MCP SDK import
 from caldav_client import CalDAVClient
 from ical_utils import ICalUtils
 
@@ -162,14 +162,14 @@ tools = {
 }
 
 # ==========================
-# Start MCP HTTP server
+# Start MCP Server
 # ==========================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    host = "0.0.0.0"
+    mcp = FastMCP("iCloud CalDAV MCP Server")
 
-    logger.info("🚀 Starting iCloud CalDAV MCP Server")
-    logger.info(f"🚀 Server URL: http://{host}:{port}")
-    logger.info(f"🚀 MCP Endpoint: http://{host}:{port}/mcp")
+    # Register tools
+    for tool_name, tool_func in tools.items():
+        mcp.tool()(tool_func)
 
-    http.http_server(tools, host=host, port=port)
+    # Run the server
+    mcp.run()
