@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-iCloud CalDAV MCP Server using the official MCP SDK
+iCloud CalDAV mcp Server using the official mcp SDK
 """
 import os
 import sys
@@ -25,21 +25,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize MCP
-mcp = MCP("iCloud CalDAV MCP Server")
+# Initialize mcp
+mcp = mcp("iCloud CalDAV mcp Server")
 
 # Initialize CalDAV client
 caldav_client = CalDAVClient()
 ical_utils = ICalUtils()
 
 # -----------------------
-# MCP TOOLS
+# mcp TOOLS
 # -----------------------
 
 @mcp.tool(description="Greet a user by name.")
 def greet(name: str) -> str:
     logger.info(f"Called greet({name})")
-    return f"Hello, {name}! Welcome to the iCloud CalDAV MCP server."
+    return f"Hello, {name}! Welcome to the iCloud CalDAV mcp server."
 
 @mcp.tool(description="Check iCloud CalDAV connection.")
 def get_connection_status() -> Dict[str, object]:
@@ -123,5 +123,5 @@ def create_my_event(
 if __name__ == "__main__":
     host = "0.0.0.0"
     port = int(os.environ.get("PORT", 8000))
-    logger.info(f"Starting MCP server on {host}:{port}")
+    logger.info(f"Starting mcp server on {host}:{port}")
     mcp.run(transport="http", host=host, port=port, stateless_http=True)
