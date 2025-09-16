@@ -10,7 +10,8 @@ from typing import Optional, Dict
 from uuid import uuid4
 import json
 
-from mcp import MCP
+import mcp
+from mcp.server import stdio
 from icalendar import Calendar as IcsCalendar, Event as IcsEvent
 
 from caldav_client import CalDAVClient
