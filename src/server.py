@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-iCloud CalDAV MCP Server
-Full MCP SDK server providing calendar operations for iCloud via CalDAV.
+iCloud CalDAV mcp Server
+Full mcp SDK server providing calendar operations for iCloud via CalDAV.
 """
 import os
 import sys
@@ -26,8 +26,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize MCP server
-mcp_server = mcp.MCP(name="iCloud CalDAV MCP Server")
+# Initialize mcp server
+mcp_server = mcp.mcp(name="iCloud CalDAV mcp Server")
 
 # Initialize CalDAV client
 caldav_client = CalDAVClient()
@@ -35,19 +35,19 @@ ical_utils = ICalUtils()
 
 
 # =========================================
-# MCP TOOLS
+# mcp TOOLS
 # =========================================
 
 @mcp_server.tool(description="Greet a user by name.")
 def greet(name: str) -> str:
     logger.info(f"🔧 TOOL CALL: greet(name='{name}')")
-    return f"Hello, {name}! Welcome to the iCloud CalDAV MCP server."
+    return f"Hello, {name}! Welcome to the iCloud CalDAV mcp server."
 
 
 @mcp_server.tool(description="Get basic server info.")
 def get_server_info() -> dict:
     return {
-        "server_name": "iCloud CalDAV MCP Server",
+        "server_name": "iCloud CalDAV mcp Server",
         "version": "1.0.0",
         "environment": os.environ.get("ENVIRONMENT", "development"),
         "python_version": sys.version.split()[0]
@@ -336,13 +336,13 @@ def list_event_alarms(
 
 
 # =========================================
-# RUN MCP SERVER
+# RUN mcp SERVER
 # =========================================
 
 if __name__ == "__main__":
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", 8000))
-    logger.info(f"🚀 Starting MCP Server on http://{host}:{port}/mcp")
+    logger.info(f"🚀 Starting mcp Server on http://{host}:{port}/mcp")
 
     # HTTP server (persistent)
     mcp_server.run(transport="http", host=host, port=port, stateless_http=False)
