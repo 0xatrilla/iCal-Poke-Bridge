@@ -1,4 +1,4 @@
-mcp>=1.14.0
-icalendar>=5.1
-caldav>=0.10
+mcp>=1.2.0
+icalendar>=4.0.0
+caldav>=0.8.0
 requests>=2.31
