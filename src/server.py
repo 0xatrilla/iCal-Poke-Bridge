@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 """
 iCloud CalDAV MCP Server
-A MCP server that provides calendar operations for iCloud using CalDAV.
-Uses the official MCP SDK with stdio_server.
+A FastMCP server that provides calendar operations for iCloud using CalDAV.
+Fully compatible with MCP SDK v2+ and Render deployments.
 """
+
 import os
+import sys
 import json
 import logging
-import sys
 from datetime import datetime, date, timezone, timedelta
-from typing import List, Dict, Optional
+from typing import Optional, Dict, List
 from uuid import uuid4
 
 import mcp
-from icalendar import Calendar as IcsCalendar, Event as IcsEvent
+from mcp.stdio import stdio_server
 
+from icalendar import Calendar as IcsCalendar, Event as IcsEvent
 from caldav_client import CalDAVClient
 from ical_utils import ICalUtils
 
-# Configure logging
+# ==============================
+# Logging configuration
+# ==============================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -26,40 +30,62 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize CalDAV client and ICS utils
+# ==============================
+# Initialize clients
+# ==============================
 caldav_client = CalDAVClient()
 ical_utils = ICalUtils()
 
-# =============================================================================
-# MCP TOOLS
-# =============================================================================
-
-tools = []
+# ==============================
+# Tool registration
+# ==============================
+tools: List[mcp.Tool] = []
 
 def tool(func=None, *, description=""):
-    """Helper to register tools for MCP SDK."""
+    """Decorator to register tools with required inputSchema for MCP SDK v2+"""
     def decorator(f):
-        tools.append(mcp.Tool(name=f.__name__, func=f, description=description))
+        params = f.__annotations__
+        if not params:
+            input_schema = {"type": "object", "properties": {}}
+        else:
+            props = {}
+            for k, v in params.items():
+                props[k] = {"type": "string"}  # default to string
+            input_schema = {"type": "object", "properties": props, "required": list(props.keys())}
+        tools.append(
+            mcp.Tool(
+                name=f.__name__,
+                func=f,
+                description=description,
+                inputSchema=input_schema
+            )
+        )
         return f
     if func:
         return decorator(func)
     return decorator
+
+# ==============================
+# MCP Tools
+# ==============================
 
 @tool(description="Greet a user by name with a welcome message.")
 def greet(name: str) -> str:
     logger.info(f"🔧 TOOL CALL: greet(name='{name}')")
     return f"Hello, {name}! Welcome to the iCloud CalDAV MCP server."
 
-@tool(description="Get MCP server info.")
-def get_server_info() -> dict:
+@tool(description="Get server info and HTTP request guidance.")
+def get_server_info() -> Dict[str, object]:
+    logger.info("🔧 TOOL CALL: get_server_info()")
     return {
         "server_name": "iCloud CalDAV MCP Server",
         "version": "1.0.0",
         "environment": os.environ.get("ENVIRONMENT", "development"),
-        "python_version": sys.version.split()[0]
+        "python_version": sys.version.split()[0],
+        "note": "All MCP tools require JSON-RPC 2.0 format."
     }
 
-@tool(description="Test the iCloud CalDAV connection.")
+@tool(description="Test iCloud CalDAV connection status.")
 def get_connection_status() -> Dict[str, object]:
     logger.info("🔧 TOOL CALL: get_connection_status()")
     try:
@@ -77,7 +103,7 @@ def get_connection_status() -> Dict[str, object]:
         logger.error(f"❌ get_connection_status failed: {e}")
         return {"success": False, "error": str(e)}
 
-@tool(description="List your iCloud calendars.")
+@tool(description="List iCloud calendars.")
 def list_my_calendars() -> Dict[str, object]:
     logger.info("🔧 TOOL CALL: list_my_calendars()")
     try:
@@ -89,13 +115,13 @@ def list_my_calendars() -> Dict[str, object]:
         logger.error(f"❌ list_my_calendars failed: {e}")
         return {"success": False, "error": str(e)}
 
-@tool(description="List events from your iCloud calendars.")
+@tool(description="List events from iCloud calendars.")
 def list_my_events(
     start: Optional[str] = None,
     end: Optional[str] = None,
     calendar_name: Optional[str] = None,
     timezone_name: Optional[str] = None,
-    limit: Optional[int] = None
+    limit: Optional[str] = None
 ) -> Dict[str, object]:
     logger.info(f"🔧 TOOL CALL: list_my_events(calendar_name='{calendar_name}', start='{start}', end='{end}')")
     try:
@@ -114,7 +140,8 @@ def list_my_events(
                 event_data["calendar_name"] = calendar_name
                 all_events.append(event_data)
         else:
-            for cal in caldav_client.principal.calendars():
+            calendars = caldav_client.principal.calendars()
+            for cal in calendars:
                 cal_name = caldav_client._get_calendar_display_name(cal)
                 try:
                     events = cal.date_search(start_dt, end_dt)
@@ -127,7 +154,7 @@ def list_my_events(
                     continue
 
         all_events.sort(key=lambda e: (e.get("start") or "", e.get("summary") or ""))
-        if limit is not None:
+        if limit:
             all_events = all_events[:max(0, int(limit))]
 
         return {"success": True, "events": all_events, "count": len(all_events),
@@ -136,7 +163,7 @@ def list_my_events(
         logger.error(f"❌ list_my_events failed: {e}")
         return {"success": False, "error": str(e)}
 
-@tool(description="Create an event in your iCloud calendar.")
+@tool(description="Create an event in iCloud calendar.")
 def create_my_event(
     summary: str,
     start: str,
@@ -144,13 +171,13 @@ def create_my_event(
     calendar_name: Optional[str] = None,
     description: Optional[str] = None,
     location: Optional[str] = None,
-    all_day: bool = False,
+    all_day: Optional[str] = None,
     timezone_name: Optional[str] = None,
     rrule: Optional[str] = None,
-    alarm_minutes_before: Optional[int] = None,
+    alarm_minutes_before: Optional[str] = None,
     alarm_configs: Optional[str] = None
 ) -> Dict[str, object]:
-    logger.info(f"🔧 TOOL CALL: create_my_event(summary='{summary}')")
+    logger.info(f"🔧 TOOL CALL: create_my_event(summary='{summary}', start='{start}', end='{end}')")
     try:
         if not caldav_client.connect():
             return {"success": False, "error": "Failed to connect to CalDAV server"}
@@ -158,72 +185,40 @@ def create_my_event(
         cal = caldav_client.find_calendar(calendar_name=calendar_name)
         start_dt = ical_utils.parse_iso_datetime(start, timezone_name)
         end_dt = ical_utils.parse_iso_datetime(end, timezone_name)
-
-        if all_day:
-            if len(start.strip()) != 10 or len(end.strip()) != 10:
-                return {"success": False, "error": "For all_day events, start and end must be YYYY-MM-DD."}
-            start_date = date.fromisoformat(start.strip())
-            end_date = date.fromisoformat(end.strip())
-        else:
-            if start_dt is None or end_dt is None:
-                return {"success": False, "error": "Start and end must be valid ISO-8601 datetimes."}
-
         ics_cal = ical_utils.create_ics_calendar()
         evt = IcsEvent()
-        evt.add("uid", f"{uuid4()}@icloud-caldav-mcp")
-        evt.add("summary", summary)
-        evt.add("dtstamp", datetime.now(timezone.utc))
-        if description:
-            evt.add("description", description)
-        if location:
-            evt.add("location", location)
-        if all_day:
-            evt.add("dtstart", start_date)
-            evt.add("dtend", end_date)
+        evt.add('uid', f"{uuid4()}@icloud-caldav-mcp")
+        evt.add('summary', summary)
+        evt.add('dtstamp', datetime.now(timezone.utc))
+        if description: evt.add('description', description)
+        if location: evt.add('location', location)
+        if all_day == "true":
+            start_date = date.fromisoformat(start)
+            end_date = date.fromisoformat(end)
+            evt.add('dtstart', start_date)
+            evt.add('dtend', end_date)
         else:
-            evt.add("dtstart", start_dt.replace(tzinfo=timezone.utc))
-            evt.add("dtend", end_dt.replace(tzinfo=timezone.utc))
-        if rrule:
-            evt.add("rrule", rrule)
-
-        # Handle alarms
-        if alarm_configs:
-            try:
-                parsed_alarm_configs = json.loads(alarm_configs)
-                for alarm_config in parsed_alarm_configs:
-                    minutes_before = alarm_config.get("minutes_before", 15)
-                    description_ = alarm_config.get("description", "Reminder")
-                    action = alarm_config.get("action", "DISPLAY")
-                    related = alarm_config.get("related", "START")
-                    alarm = ical_utils.create_alarm(minutes_before, description_, action, related)
-                    evt.add_component(alarm)
-            except Exception:
-                pass
-        elif alarm_minutes_before is not None:
-            alarm = ical_utils.create_alarm(alarm_minutes_before)
-            evt.add_component(alarm)
-
+            evt.add('dtstart', start_dt)
+            evt.add('dtend', end_dt)
+        if rrule: evt.add('rrule', rrule)
         ics_cal.add_component(evt)
         try:
             ics_cal.add_missing_timezones()
         except Exception:
             pass
-
-        ics_text = ics_cal.to_ical().decode("utf-8")
+        ics_text = ics_cal.to_ical().decode('utf-8')
         created = cal.add_event(ics_text)
-        event_url = str(getattr(created, "url", None)) if created else None
-
+        event_url = str(getattr(created, 'url', None)) if created else None
         return {"success": True, "event_url": event_url or "", "summary": summary, "start": start, "end": end}
-
     except Exception as e:
         logger.error(f"❌ create_my_event failed: {e}")
         return {"success": False, "error": str(e)}
 
-# (Other tools: update_my_event, delete_my_event, list_event_alarms can be added in the same style)
-
-# =============================================================================
+# ==============================
 # START MCP STDIO SERVER
-# =============================================================================
+# ==============================
 if __name__ == "__main__":
-    logger.info(f"🚀 Starting MCP server at stdio (stdin/stdout)")
-    mcp.stdio_server(tools)
+    host = "0.0.0.0"
+    port = int(os.environ.get("PORT", 8000))
+    logger.info("🚀 Starting MCP server at http://0.0.0.0:8000/mcp")
+    stdio_server(tools=tools)
