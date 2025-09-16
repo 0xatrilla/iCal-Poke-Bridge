@@ -13,8 +13,8 @@ from datetime import datetime, date, timezone, timedelta
 from typing import Optional, Dict, List
 from uuid import uuid4
 
-import mcp
-from mcp.stdio import stdio_server
+from mcp.server.fastmcp import FastMCP
+from mcp import Tool
 
 from icalendar import Calendar as IcsCalendar, Event as IcsEvent
 from caldav_client import CalDAVClient
@@ -39,7 +39,7 @@ ical_utils = ICalUtils()
 # ==============================
 # Tool registration
 # ==============================
-tools: List[mcp.Tool] = []
+tools: List[Tool] = []
 
 def tool(func=None, *, description=""):
     """Decorator to register tools with required inputSchema for MCP SDK v2+"""
@@ -53,7 +53,7 @@ def tool(func=None, *, description=""):
                 props[k] = {"type": "string"}  # default to string
             input_schema = {"type": "object", "properties": props, "required": list(props.keys())}
         tools.append(
-            mcp.Tool(
+            Tool(
                 name=f.__name__,
                 func=f,
                 description=description,
@@ -215,10 +215,8 @@ def create_my_event(
         return {"success": False, "error": str(e)}
 
 # ==============================
-# START MCP STDIO SERVER
+# START MCP SERVER
 # ==============================
 if __name__ == "__main__":
-    host = "0.0.0.0"
-    port = int(os.environ.get("PORT", 8000))
-    logger.info("🚀 Starting MCP server at http://0.0.0.0:8000/mcp")
-    stdio_server(tools=tools)
+    server = FastMCP(name="iCloud CalDAV MCP Server", tools=tools)
+    server.run()
